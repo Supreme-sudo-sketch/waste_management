@@ -8,15 +8,94 @@ if (!isset($_SESSION['collector_id'])) {
 }
 
 $collector_name = $_SESSION['collector_name'];
-
 $error_message = "";
 $success_message = "";
 
 // Database connection
 $conn = new mysqli("localhost", "root", "", "waste");
-
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
+}
+
+// **Handle resident waste pickup status update**
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_resident_pickup'])) {
+    $pickup_id = $_POST['pickup_id'];
+    $status = "Completed";
+
+    $sql = "UPDATE waste_pickups SET status = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("si", $status, $pickup_id);
+
+    if ($stmt->execute()) {
+        $success_message = "Resident waste pickup marked as completed!";
+    } else {
+        $error_message = "Failed to update resident waste pickup status.";
+    }
+    $stmt->close();
+}
+
+// **Handle industry waste pickup status update**
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_industry_pickup'])) {
+    $pickup_id = $_POST['pickup_id'];
+    $status = "Completed";
+
+    $sql = "UPDATE industry_pickups SET status = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("si", $status, $pickup_id);
+
+    if ($stmt->execute()) {
+        $success_message = "Industry waste pickup marked as completed!";
+    } else {
+        $error_message = "Failed to update industry waste pickup status.";
+    }
+    $stmt->close();
+}
+
+// **Handle industry waste booking status update**
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_industry_booking'])) {
+    $booking_id = $_POST['booking_id'];
+    $status = "Completed";
+
+    $sql = "UPDATE industry_bookings SET status = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("si", $status, $booking_id);
+
+    if ($stmt->execute()) {
+        $success_message = "Industry waste booking marked as completed!";
+    } else {
+        $error_message = "Failed to update industry waste booking status.";
+    }
+    $stmt->close();
+}
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_resident_pickup'])) {
+    $pickup_id = $_POST['pickup_id'];
+    $collector_id = $_SESSION['collector_id'];
+
+    $stmt = $conn->prepare("UPDATE waste_pickups SET status = 'Completed', collector_id = ? WHERE id = ?");
+    $stmt->bind_param("ii", $collector_id, $pickup_id);
+    $stmt->execute();
+    $stmt->close();
+}
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_industry_pickup'])) {
+    $pickup_id = $_POST['pickup_id'];
+    $collector_id = $_SESSION['collector_id'];
+
+    $stmt = $conn->prepare("UPDATE industry_pickups SET status = 'Completed', collector_id = ? WHERE id = ?");
+    $stmt->bind_param("ii", $collector_id, $pickup_id);
+    $stmt->execute();
+    $stmt->close();
+}
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_industry_booking'])) {
+    $booking_id = $_POST['booking_id'];
+    $collector_id = $_SESSION['collector_id'];
+
+    $stmt = $conn->prepare("UPDATE industry_bookings SET status = 'Completed', collector_id = ? WHERE id = ?");
+    $stmt->bind_param("ii", $collector_id, $booking_id);
+    $stmt->execute();
+    $stmt->close();
 }
 
 // Fetch resident waste pickups
@@ -35,9 +114,16 @@ $sql = "SELECT industry_pickups.id, industries.name AS industry_name, industry_p
         ORDER BY industry_pickups.pickup_date ASC";
 $industry_pickups = $conn->query($sql);
 
+// Fetch industry waste bookings
+$sql = "SELECT industry_bookings.id, industries.name AS industry_name, industry_bookings.waste_type, industry_bookings.status 
+        FROM industry_bookings 
+        JOIN industries ON industry_bookings.industry_id = industries.id 
+        WHERE industry_bookings.status = 'Pending' 
+        ORDER BY industry_bookings.id ASC";
+$industry_bookings = $conn->query($sql);
+
 $conn->close();
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -68,12 +154,9 @@ $conn->close();
         tr:nth-child(even) { background: #f9f9f9; }
 
         /* Form Styling */
-        form { margin-top: 20px; }
-        label { font-weight: bold; display: block; margin-top: 10px; }
-        textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; }
-        button { width: 100%; padding: 10px; background: #28a745; border: none; color: white; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        form { margin-top: 10px; display: inline-block; }
+        button { padding: 8px 12px; background: #28a745; border: none; color: white; border-radius: 5px; cursor: pointer; }
         button:hover { background: #218838; }
-
     </style>
 </head>
 <body>
@@ -84,79 +167,85 @@ $conn->close();
         <a href="collectors.php">Home</a>
         <a href="#resident_pickups">Resident Pickups</a>
         <a href="#industry_pickups">Industry Pickups</a>
+        <a href="#industry_bookings">Industry Bookings</a>
         <a href="logout.php?user=collector" style="background: red;">Logout</a>
     </div>
 
     <!-- Main Content -->
     <div class="main-content">
-        <h2>Welcome, <?php echo htmlspecialchars($collector_name); ?>!</h2>
-
-        <?php if (!empty($error_message)) { echo "<p class='message error'>$error_message</p>"; } ?>
-        <?php if (!empty($success_message)) { echo "<p class='message success'>$success_message</p>"; } ?>
-
-        <!-- View Resident Pickups -->
+        <h2>Welcome, Collector!</h2>
         <h3 id="resident_pickups">Resident Waste Pickups</h3>
-        <table>
-            <tr>
-                <th>Resident Name</th>
-                <th>Waste Type</th>
-                <th>Pickup Date</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-            <?php while ($row = $resident_pickups->fetch_assoc()): ?>
-                <tr>
-                    <td><?php echo htmlspecialchars($row['resident_name']); ?></td>
-                    <td><?php echo htmlspecialchars($row['waste_type']); ?></td>
-                    <td><?php echo htmlspecialchars($row['pickup_date']); ?></td>
-                    <td><?php echo htmlspecialchars($row['status']); ?></td>
-                    <td>
-                        <form action="collectors.php" method="POST">
-                            <input type="hidden" name="pickup_id" value="<?php echo $row['id']; ?>">
-                            <button type="submit" name="update_resident_pickup" style="background: #007bff; color: white;">Mark as Completed</button>
-                        </form>
-                    </td>
-                </tr>
-            <?php endwhile; ?>
-        </table>
+<table>
+    <tr>
+        <th>Resident Name</th>
+        <th>Waste Type</th>
+        <th>Pickup Date</th>
+        <th>Status</th>
+        <th>Action</th>
+    </tr>
+    <?php while ($row = $resident_pickups->fetch_assoc()): ?>
+        <tr>
+            <td><?php echo htmlspecialchars($row['resident_name']); ?></td>
+            <td><?php echo htmlspecialchars($row['waste_type']); ?></td>
+            <td><?php echo htmlspecialchars($row['pickup_date']); ?></td>
+            <td><?php echo htmlspecialchars($row['status']); ?></td>
+            <td>
+                <form action="collectors.php" method="POST">
+                    <input type="hidden" name="pickup_id" value="<?php echo $row['id']; ?>">
+                    <button type="submit" name="update_resident_pickup">Mark as Completed</button>
+                </form>
+            </td>
+        </tr>
+    <?php endwhile; ?>
+</table>
 
-        <!-- View Industry Pickups -->
         <h3 id="industry_pickups">Industry Waste Pickups</h3>
-        <table>
-            <tr>
-                <th>Industry Name</th>
-                <th>Waste Type</th>
-                <th>Pickup Date</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-            <?php while ($row = $industry_pickups->fetch_assoc()): ?>
-                <tr>
-                    <td><?php echo htmlspecialchars($row['industry_name']); ?></td>
-                    <td><?php echo htmlspecialchars($row['waste_type']); ?></td>
-                    <td><?php echo htmlspecialchars($row['pickup_date']); ?></td>
-                    <td><?php echo htmlspecialchars($row['status']); ?></td>
-                    <td>
-                        <form action="collectors.php" method="POST">
-                            <input type="hidden" name="pickup_id" value="<?php echo $row['id']; ?>">
-                            <button type="submit" name="update_industry_pickup" style="background: #007bff; color: white;">Mark as Completed</button>
-                        </form>
-                    </td>
-                </tr>
-            <?php endwhile; ?>
-        </table>
+<table>
+    <tr>
+        <th>Industry Name</th>
+        <th>Waste Type</th>
+        <th>Pickup Date</th>
+        <th>Status</th>
+        <th>Action</th>
+    </tr>
+    <?php while ($row = $industry_pickups->fetch_assoc()): ?>
+        <tr>
+            <td><?php echo htmlspecialchars($row['industry_name']); ?></td>
+            <td><?php echo htmlspecialchars($row['waste_type']); ?></td>
+            <td><?php echo htmlspecialchars($row['pickup_date']); ?></td>
+            <td><?php echo htmlspecialchars($row['status']); ?></td>
+            <td>
+                <form action="collectors.php" method="POST">
+                    <input type="hidden" name="pickup_id" value="<?php echo $row['id']; ?>">
+                    <button type="submit" name="update_industry_pickup">Mark as Completed</button>
+                </form>
+            </td>
+        </tr>
+    <?php endwhile; ?>
+</table>
 
-        <!-- Submit Complaint -->
-        <h3>Submit a Complaint</h3>
-        <form action="collectors.php" method="POST">
-            <label>Complaint</label>
-            <textarea name="complaint" rows="4" placeholder="Enter your complaint..." required></textarea>
-            <input type="hidden" name="user_id" value="<?php echo $_SESSION['collector_id']; ?>">
-            <input type="hidden" name="user_type" value="collector">
-            <button type="submit" name="submit_complaint">Submit Complaint</button>
-        </form>
-
+        <h3 id="industry_bookings">Industry Waste Bookings</h3>
+<table>
+    <tr>
+        <th>Industry Name</th>
+        <th>Waste Type</th>
+        <th>Status</th>
+        <th>Action</th>
+    </tr>
+    <?php while ($row = $industry_bookings->fetch_assoc()): ?>
+        <tr>
+            <td><?php echo htmlspecialchars($row['industry_name']); ?></td>
+            <td><?php echo htmlspecialchars($row['waste_type']); ?></td>
+            <td><?php echo htmlspecialchars($row['status']); ?></td>
+            <td>
+                <form action="collectors.php" method="POST">
+                    <input type="hidden" name="booking_id" value="<?php echo $row['id']; ?>">
+                    <button type="submit" name="update_industry_booking">Mark as Completed</button>
+                </form>
+            </td>
+        </tr>
+    <?php endwhile; ?>
+</table>
     </div>
-
 </body>
 </html>

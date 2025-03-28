@@ -13,6 +13,9 @@ $resident_id = $_SESSION['resident_id'];
 $error_message = "";
 $success_message = "";
 
+// Generate a unique transaction ID to prevent undefined variable errors
+$transaction_id = uniqid("TXN", true);
+
 // Database connection
 $conn = new mysqli("localhost", "root", "", "waste");
 
@@ -107,20 +110,33 @@ $conn->close();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resident Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f4f4; }
-        .container { width: 50%; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); }
-        h2 { text-align: center; }
-        .message { text-align: center; font-size: 16px; margin-bottom: 10px; }
-        .error { color: red; }
-        .success { color: green; }
-        form { margin-bottom: 20px; }
-        label { font-weight: bold; display: block; margin-top: 10px; }
-        input, select, textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; }
-        button { width: 100%; padding: 10px; background: #28a745; border: none; color: white; border-radius: 5px; cursor: pointer; margin-top: 10px; }
-        button:hover { background: #218838; }
-        .logout { text-align: center; margin-top: 20px; }
-        .logout a { color: red; text-decoration: none; font-weight: bold; }
-    </style>
+    body { 
+        font-family: Arial, sans-serif; 
+        background: url('https://i.pinimg.com/736x/d5/97/50/d59750a5b56c821ea7114f0adf1e132b.jpg') no-repeat center center fixed; 
+        background-size: cover; 
+    }
+    .container { 
+        width: 50%; 
+        margin: auto; 
+        background: white; 
+        padding: 20px; 
+        border-radius: 8px; 
+        box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); 
+        opacity: 0.95; /* Slight transparency for better readability */
+    }
+    h2 { text-align: center; }
+    .message { text-align: center; font-size: 16px; margin-bottom: 10px; }
+    .error { color: red; }
+    .success { color: green; }
+    form { margin-bottom: 20px; }
+    label { font-weight: bold; display: block; margin-top: 10px; }
+    input, select, textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; }
+    button { width: 100%; padding: 10px; background: #28a745; border: none; color: white; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+    button:hover { background: #218838; }
+    .logout { text-align: center; margin-top: 20px; }
+    .logout a { color: red; text-decoration: none; font-weight: bold; }
+</style>
+
 </head>
 <body>
     <div class="container">
@@ -155,19 +171,23 @@ $conn->close();
 
         <!-- Pay for Waste Collection -->
         <h3>Pay for Waste Collection</h3>
-        <form action="residents.php" method="POST">
-            <label>Amount</label>
-            <input type="number" name="amount" step="0.01" required>
-            <label>Payment Method</label>
-            <select name="payment_method" required>
-                <option value="Cash">Cash</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-                <option value="Mobile Payment">Mobile Payment</option>
-            </select>
-            <label>Transaction ID</label>
-            <input type="text" name="transaction_id" required>
-            <button type="submit" name="submit_payment">Submit Payment</button>
-        </form>
+<form action="residents.php" method="POST">
+    <label>Amount</label>
+    <input type="number" name="amount" step="0.01" required>
+    
+    <label>Payment Method</label>
+    <select name="payment_method" required>
+        <option value="Cash">Cash</option>
+        <option value="Bank Transfer">Bank Transfer</option>
+        <option value="Mobile Payment">Mobile Payment</option>
+    </select>
+    
+    <label>Transaction ID</label>
+    <input type="text" name="transaction_id" value="<?php echo htmlspecialchars($transaction_id); ?>" readonly>
+    
+    <button type="submit" name="submit_payment">Submit Payment</button>
+</form>
+
 
         <!-- Logout -->
         <div class="logout">

@@ -12,7 +12,7 @@
             font-family: Arial, sans-serif;
         }
         body {
-            background-color: #f4f4f4;
+            background-color: black;
         }
         .navbar {
             background: #28a745;
@@ -37,7 +37,7 @@
         .hero {
             text-align: center;
             padding: 100px 20px;
-            background: url('https://source.unsplash.com/1600x900/?recycling,environment') center/cover no-repeat;
+            background: url('https://i.pinimg.com/736x/55/06/d1/5506d10fb6fb7c4ebad6b6c3e590231a.jpg') center/cover no-repeat;
             color: white;
             height: 100vh;
             display: flex;
@@ -88,8 +88,7 @@
         .section {
             text-align: center;
             padding: 50px 20px;
-            background: white;
-        }
+            background: ghostwhite;
         .footer {
             text-align: center;
             padding: 20px;
@@ -104,7 +103,6 @@
     <!-- Navbar -->
     <div class="navbar">
         <a href="home.html">Home</a>
-        <a href="login.php">Login</a>
         <a href="about.php">About Us</a>
         <a href="contact.php">Contact</a>
     </div>
@@ -113,9 +111,7 @@
     <div class="hero">
         <h1> City Safisha</h1>
         <p>Efficient, eco-friendly waste collection and recycling for a cleaner future.</p>
-        <div class="buttons">
-            <a href="login.php" class="btn btn-blue">Get Started</a>
-        </div>
+
     </div>
 
     <!-- Registration Sections -->

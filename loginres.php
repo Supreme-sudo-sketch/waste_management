@@ -1,44 +1,46 @@
 <?php
 session_start();
-$error_message = "";
+$errorMessage = "";
 
-// Check if form is submitted
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $email = trim($_POST['email']);
     $password = trim($_POST['password']);
 
     if (empty($email) || empty($password)) {
-        $error_message = "All fields are required.";
+        $errorMessage = "All fields are required.";
     } else {
-        // Database connection
         $conn = new mysqli("localhost", "root", "", "waste");
 
         if ($conn->connect_error) {
             die("Connection failed: " . $conn->connect_error);
         }
 
-        // Check if resident exists
         $sql = "SELECT * FROM residents WHERE email = ? LIMIT 1";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
 
-        if ($result->num_rows == 1) {
-            $resident = $result->fetch_assoc();
-            if (password_verify($password, $resident['password'])) {
-                $_SESSION['resident_id'] = $resident['id'];
-                $_SESSION['resident_name'] = $resident['name'];
-                header("Location: residents.php"); // Redirect to resident dashboard
-                exit();
-            } else {
-                $error_message = "Invalid email or password.";
-            }
+        if ($stmt === false) {
+            $errorMessage = "Database error: " . $conn->error;
         } else {
-            $error_message = "Resident not found.";
-        }
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
 
-        $stmt->close();
+            if ($result->num_rows === 1) {
+                $resident = $result->fetch_assoc();
+                if (password_verify($password, $resident['password'])) {
+                    $_SESSION['resident_id'] = $resident['id'];
+                    $_SESSION['resident_name'] = $resident['name'];
+                    header("Location: residents.php");
+                    exit();
+                } else {
+                    $errorMessage = "Invalid email or password.";
+                }
+            } else {
+                $errorMessage = "Resident not found.";
+            }
+
+            $stmt->close();
+        }
         $conn->close();
     }
 }
@@ -53,13 +55,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-        body { background: #f4f4f4; }
+        body {
+            background-image: url('https://i.pinimg.com/736x/24/25/74/242574a31c08a044aba20fcf15694ca7.jpg'); /* Replace with your image path */
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed; /* Optional: Fix the background */
+            display: flex; /* For centering the login form */
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+            min-height: 100vh; /* Ensure full viewport height */
+        }
 
-        /* Navbar Styling */
         .navbar {
             background: #28a745;
             padding: 15px 20px;
             text-align: center;
+            position: fixed; /* Fixed navbar at the top */
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 100; /* Ensure navbar is above other content */
         }
         .navbar a {
             color: white;
@@ -73,16 +88,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             border-radius: 5px;
         }
 
-        /* Login Box */
         .login-container {
             background: white;
             padding: 30px;
             width: 100%;
             max-width: 400px;
-            margin: 80px auto;
             border-radius: 10px;
             box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
             text-align: center;
+            margin-top: 80px; /* Add margin to prevent overlap with navbar */
         }
         .login-container h2 {
             margin-bottom: 20px;
@@ -129,7 +143,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             text-decoration: underline;
         }
 
-        /* Error Message Styling */
         .error-message {
             color: red;
             font-size: 16px;
@@ -139,19 +152,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </head>
 <body>
 
-    <!-- Navbar -->
     <div class="navbar">
         <a href="home.html">Home</a>
-        <a href="regres.php">Register</a>
         <a href="about.php">About Us</a>
         <a href="contact.php">Contact</a>
     </div>
 
-    <!-- Login Form -->
     <div class="login-container">
         <h2>Resident Login</h2>
-        
-        <?php if (!empty($error_message)) { echo "<p class='error-message'>$error_message</p>"; } ?>
+
+        <?php if (!empty($errorMessage)) { echo "<p class='error-message'>$errorMessage</p>"; } ?>
 
         <form action="loginres.php" method="POST">
             <div class="input-group">
@@ -164,7 +174,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             <button type="submit" class="btn">Login</button>
         </form>
-        
+
+
+
         <div class="forgot-password">
             <a href="forgot_password.php">Forgot Password?</a>
         </div>

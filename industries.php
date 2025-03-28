@@ -13,9 +13,11 @@ $industry_id = $_SESSION['industry_id'];
 $error_message = "";
 $success_message = "";
 
+// Generate a unique transaction ID to prevent undefined variable errors
+$transaction_id = uniqid("TXN", true);
+
 // Database connection
 $conn = new mysqli("localhost", "root", "", "waste");
-
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
@@ -25,107 +27,90 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['schedule_pickup'])) {
     $waste_type = $_POST['waste_type'];
     $pickup_date = $_POST['pickup_date'];
 
-    if (empty($waste_type) || empty($pickup_date)) {
-        $error_message = "All fields are required.";
-    } else {
-        $sql = "INSERT INTO industry_pickups (industry_id, waste_type, pickup_date) VALUES (?, ?, ?)";
-        $stmt = $conn->prepare($sql);
+    if (!empty($waste_type) && !empty($pickup_date)) {
+        $stmt = $conn->prepare("INSERT INTO industry_pickups (industry_id, waste_type, pickup_date, status) VALUES (?, ?, ?, 'Pending')");
         $stmt->bind_param("iss", $industry_id, $waste_type, $pickup_date);
-
         if ($stmt->execute()) {
             $success_message = "Waste pickup scheduled successfully!";
         } else {
-            $error_message = "Failed to schedule pickup.";
+            $error_message = "Failed to schedule pickup: " . $stmt->error;
         }
-
         $stmt->close();
+    } else {
+        $error_message = "All fields are required.";
     }
 }
+
 
 // Handle waste booking for recycling
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['book_waste'])) {
     $requested_waste_type = $_POST['requested_waste_type'];
-
-    if (empty($requested_waste_type)) {
-        $error_message = "Please select the type of waste you need.";
-    } else {
-        $sql = "INSERT INTO industry_bookings (industry_id, waste_type) VALUES (?, ?)";
-        $stmt = $conn->prepare($sql);
+    
+    if (!empty($requested_waste_type)) {
+        $stmt = $conn->prepare("INSERT INTO industry_bookings (industry_id, waste_type, status) VALUES (?, ?, 'Pending')");
         $stmt->bind_param("is", $industry_id, $requested_waste_type);
-
+        
         if ($stmt->execute()) {
             $success_message = "Waste booked successfully!";
         } else {
             $error_message = "Failed to book waste.";
         }
-
         $stmt->close();
+    } else {
+        $error_message = "Please select the type of waste you need.";
     }
 }
 
-// Handle payment submission
+// Handle payments
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_payment'])) {
+    $payment_for = $_POST['payment_for'];
     $amount = $_POST['amount'];
     $payment_method = $_POST['payment_method'];
-    $transaction_id = $_POST['transaction_id'];
-    $payment_for = $_POST['payment_for'];
+    // Generate a unique transaction ID
+    $transaction_id = uniqid("TXN", true); // Generates a unique transaction ID
 
-    if (!empty($amount) && !empty($transaction_id)) {
-        $sql = "INSERT INTO payments (user_id, user_type, payment_for, amount, payment_method, transaction_id) 
-                VALUES (?, 'industry', ?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
+
+   
+    if (!empty($amount) && !empty($payment_for)) {
+        $stmt = $conn->prepare("INSERT INTO payments (user_id, user_type, payment_for, amount, payment_method, transaction_id, status) 
+                                VALUES (?, 'industry', ?, ?, ?, ?, 'Pending')");
         $stmt->bind_param("isdss", $industry_id, $payment_for, $amount, $payment_method, $transaction_id);
-
+        
         if ($stmt->execute()) {
             $success_message = "Payment submitted successfully!";
         } else {
-            $error_message = "Failed to process payment.";
+            $error_message = "Failed to process payment: " . $stmt->error;
         }
-
         $stmt->close();
     } else {
-        $error_message = "Please fill all fields.";
+        $error_message = "Please fill all required fields.";
     }
 }
 
-// Handle complaint submission
+
+// Handle complaint submission (Feedback)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_complaint'])) {
     $complaint = trim($_POST['complaint']);
-
+    
     if (!empty($complaint)) {
-        $sql = "INSERT INTO complaints (user_id, user_type, complaint) VALUES (?, 'industry', ?)";
-        $stmt = $conn->prepare($sql);
+        $stmt = $conn->prepare("INSERT INTO complaints (user_id, user_type, complaint, status) VALUES (?, 'industry', ?, 'Pending')");
         $stmt->bind_param("is", $industry_id, $complaint);
-
-        if ($stmt->execute()) {
-            $success_message = "Complaint submitted successfully!";
-        } else {
-            $error_message = "Failed to submit complaint.";
-        }
-
+        $stmt->execute() ? $success_message = "Complaint submitted successfully!" : $error_message = "Failed to submit complaint.";
         $stmt->close();
     } else {
         $error_message = "Complaint cannot be empty.";
     }
 }
 
-// Fetch industry pickups
-$sql = "SELECT waste_type, pickup_date, status FROM industry_pickups WHERE industry_id = ?";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $industry_id);
-$stmt->execute();
-$pickup_result = $stmt->get_result();
-$pickups = $pickup_result->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
+// Fetch industry bookings pickups and payments
+$bookings = $conn->query("SELECT waste_type, status FROM industry_bookings WHERE industry_id = $industry_id ORDER BY id DESC");
 
-// Fetch industry bookings
-$sql = "SELECT waste_type, status FROM industry_bookings WHERE industry_id = ?";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $industry_id);
-$stmt->execute();
-$booking_result = $stmt->get_result();
-$bookings = $booking_result->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
+$pickups = $conn->query("SELECT waste_type, pickup_date, status FROM industry_pickups WHERE industry_id = $industry_id ORDER BY pickup_date DESC");
+
+$payments = $conn->query("SELECT payment_for, amount, payment_method, transaction_id, status FROM payments WHERE user_id = $industry_id ORDER BY id DESC");
+
+$complaints = $conn->query("SELECT complaint, status FROM complaints WHERE user_id = $industry_id ORDER BY id DESC");
+
 
 $conn->close();
 ?>
@@ -137,52 +122,93 @@ $conn->close();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Industry Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f4f4; }
-        .container { width: 50%; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); }
-        h2 { text-align: center; }
-        .message { text-align: center; font-size: 16px; margin-bottom: 10px; }
+         body { 
+        font-family: Arial, sans-serif; 
+        background: url('background.jpg') no-repeat center center fixed; 
+        background-size: cover; 
+        margin: 20px;
+    }
+        h2 { color: #333; }
+        h3 { color: #555; margin-top: 20px; }
+        form { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; color: #333; }
+        input[type="date"], input[type="number"], input[type="text"], select { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .logout-btn { display: inline-block; padding: 10px 15px; background-color: #d9534f; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+        .logout-btn:hover { background-color: #c9302c; }
         .error { color: red; }
         .success { color: green; }
-        form { margin-bottom: 20px; }
-        label { font-weight: bold; display: block; }
-        input, select, textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; }
-        button { width: 100%; padding: 10px; background: #007bff; border: none; color: white; border-radius: 5px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .logout { text-align: center; margin-top: 20px; }
-        .logout a { color: red; text-decoration: none; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Welcome, <?php echo htmlspecialchars($industry_name); ?>!</h2>
+    <h2>Welcome, <?php echo htmlspecialchars($industry_name); ?>!</h2>
+    
+    <?php if (!empty($error_message)) echo "<p class='error'>$error_message</p>"; ?>
+    <?php if (!empty($success_message)) echo "<p class='success'>$success_message</p>"; ?>
 
-        <?php if (!empty($error_message)) { echo "<p class='message error'>$error_message</p>"; } ?>
-        <?php if (!empty($success_message)) { echo "<p class='message success'>$success_message</p>"; } ?>
+    <h3>Schedule a Waste Pickup</h3>
+    <form method="POST">
+        <label>Waste Type</label>
+        <select name="waste_type" required>
+            <option value="">Select Waste Type</option>
+            <option value="Organic">Organic</option>
+            <option value="Recyclable">Recyclable</option>
+            <option value="Non-Recyclable">Non-Recyclable</option>
+            <option value="Hazardous">Hazardous</option>
+        </select>
+        <label>Pickup Date</label>
+        <input type="date" name="pickup_date" required>
+        <button type="submit" name="schedule_pickup">Schedule Pickup</button>
+    </form>
+    
+    <h3>Book Waste for Recycling</h3>
+    <form method="POST">
+        <label>Waste Type</label>
+        <select name="requested_waste_type" required>
+            <option value="">Select Waste Type</option>
+            <option value="Organic">Organic</option>
+            <option value="Recyclable">plastic</option>
+            <option value="Non-Recyclable">metal</option>
+            <option value="Hazardous">glass</option>
+        </select>
+        <button type="submit" name="book_waste">Book Waste</button>
+    </form>
 
-        <h3>Schedule a Waste Pickup</h3>
-        <form action="industries.php" method="POST">
-            <label for="waste_type">Waste Type</label>
-            <select name="waste_type" required>
-                <option value="">Select Waste Type</option>
-                <option value="Organic">Organic</option>
-                <option value="Recyclable">Recyclable</option>
-                <option value="Non-Recyclable">Non-Recyclable</option>
-                <option value="Hazardous">Hazardous</option>
-            </select>
-            <label for="pickup_date">Pickup Date</label>
-            <input type="date" name="pickup_date" required>
-            <button type="submit" name="schedule_pickup">Schedule Pickup</button>
-        </form>
+    <h3>Make a Payment</h3>
+    <form method="POST">
+        <label>Payment For</label>
+        <select name="payment_for" required>
+            <option value="">Select Payment Type</option>
+            <option value="Waste Pickup">Waste Pickup</option>
+            <option value="Booking">Booking</option>
+            <option value="Both">Both</option>
+        </select>
+        <label>Amount</label>
+        <input type="number" name="amount" required>
+        <label>Payment Method</label>
+        <select name="payment_method" required>
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+        </select>
+        <label>Transaction ID</label>
+<input type="text" name="transaction_id" value="<?php echo htmlspecialchars($transaction_id); ?>" readonly>
 
-        <h3>Submit a Complaint</h3>
-        <form action="industries.php" method="POST">
-            <textarea name="complaint" rows="4" required></textarea>
-            <button type="submit" name="submit_complaint">Submit Complaint</button>
-        </form>
 
-        <div class="logout">
-            <a href="logout.php?user=industry">Logout</a>
-        </div>
-    </div>
+        <button type="submit" name="submit_payment">Submit Payment</button>
+    </form>
+
+    <h3>Submit Feedback / Complaint</h3>
+    <form method="POST">
+        <label>Complaint</label>
+        <textarea name="complaint" rows="4" required></textarea>
+        <button type="submit" name="submit_complaint">Submit Complaint</button>
+    </form>
+
+    <a href="logout.php?user=industry" class="logout-btn">Logout</a>
 </body>
 </html>
